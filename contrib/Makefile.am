@@ -1,4 +1,4 @@
-SUBDIRS = iv_getaddrinfo
+SUBDIRS = iv_getaddrinfo iv_mcast_group
 
 if HAVE_LINUX_NETFILTER_IPV4_H
 SUBDIRS += kojines
