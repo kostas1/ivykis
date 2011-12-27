@@ -296,6 +296,7 @@ AC_CHECK_FUNCS([kqueue])
 AC_CHECK_FUNCS([poll])
 AC_CHECK_FUNCS([port_create])
 AC_CHECK_FUNCS([pthread_spin_lock])
+AC_CHECK_FUNCS([unshare])
 
 #
 # Only test for splice(2) on Linux, to avoid confusing it with a
@@ -361,11 +362,13 @@ AM_CONDITIONAL([NEED_SELECT],
 AM_CONDITIONAL([HAVE_INOTIFY], [test x$ac_cv_func_inotify_init = xyes])
 AM_CONDITIONAL([HAVE_LINUX_NETFILTER_IPV4_H],
 		[test x$ac_cv_header_linux_netfilter_ipv4_h = xyes])
+AM_CONDITIONAL([HAVE_UNSHARE], [test x$ac_cv_func_unshare = xyes])
 AM_CONDITIONAL([HAVE_VERSIONING], [test $ac_cv_prog_ld_version_script = yes])
 
 AC_CONFIG_FILES([Makefile			\
 		 contrib/Makefile		\
 		 contrib/iv_getaddrinfo/Makefile	\
+		 contrib/iv_netns/Makefile	\
 		 contrib/kojines/Makefile	\
 		 lib/Makefile			\
 		 lib/include/iv.h		\
