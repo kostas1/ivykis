@@ -26,7 +26,10 @@
 #include <inttypes.h>
 #include "spinlock.h"
 
+#define MAX_SIGS		32
+
 static spinlock_t sig_lock;
+static int total_num_interests[MAX_SIGS];
 static struct iv_avl_tree process_sigs;
 static sigset_t sig_mask_fork;
 
@@ -182,7 +185,7 @@ int iv_signal_register(struct iv_signal *this)
 
 	spin_lock_sigmask(&sig_lock, &mask);
 
-	if (__iv_signal_find_first(this->signum) == NULL) {
+	if (!total_num_interests[this->signum]++) {
 		struct sigaction sa;
 
 		sa.sa_handler = iv_signal_handler;
@@ -204,7 +207,7 @@ void iv_signal_unregister(struct iv_signal *this)
 	spin_lock_sigmask(&sig_lock, &mask);
 
 	iv_avl_tree_delete(&process_sigs, &this->an);
-	if (__iv_signal_find_first(this->signum) == NULL) {
+	if (!--total_num_interests[this->signum]) {
 		struct sigaction sa;
 
 		sa.sa_handler = SIG_DFL;
