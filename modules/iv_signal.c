@@ -26,8 +26,8 @@
 #include <inttypes.h>
 #include "spinlock.h"
 
-static spinlock_t sig_interests_lock;
-static struct iv_avl_tree sig_interests;
+static spinlock_t sig_lock;
+static struct iv_avl_tree process_sigs;
 static sigset_t sig_mask_fork;
 
 static int iv_signal_compare(struct iv_avl_node *_a, struct iv_avl_node *_b)
@@ -59,7 +59,7 @@ static void iv_signal_prepare(void)
 {
 	sigset_t mask;
 
-	spin_lock_sigmask(&sig_interests_lock, &mask);
+	spin_lock_sigmask(&sig_lock, &mask);
 	sig_mask_fork = mask;
 }
 
@@ -68,7 +68,7 @@ static void iv_signal_parent(void)
 	sigset_t mask;
 
 	mask = sig_mask_fork;
-	spin_unlock_sigmask(&sig_interests_lock, &mask);
+	spin_unlock_sigmask(&sig_lock, &mask);
 }
 
 static void iv_signal_child(void)
@@ -82,7 +82,7 @@ static void iv_signal_child(void)
 	sa.sa_flags = 0;
 
 	last_signum = -1;
-	iv_avl_tree_for_each (an, &sig_interests) {
+	iv_avl_tree_for_each (an, &process_sigs) {
 		struct iv_signal *is;
 
 		is = iv_container_of(an, struct iv_signal, an);
@@ -92,7 +92,7 @@ static void iv_signal_child(void)
 		}
 	}
 
-	sig_interests.root = NULL;
+	process_sigs.root = NULL;
 
 	iv_signal_parent();
 }
@@ -100,9 +100,9 @@ static void iv_signal_child(void)
 static void iv_signal_init(void) __attribute__((constructor));
 static void iv_signal_init(void)
 {
-	spin_init(&sig_interests_lock);
+	spin_init(&sig_lock);
 
-	INIT_IV_AVL_TREE(&sig_interests, iv_signal_compare);
+	INIT_IV_AVL_TREE(&process_sigs, iv_signal_compare);
 
 	pthread_atfork(iv_signal_prepare, iv_signal_parent, iv_signal_child);
 }
@@ -112,7 +112,7 @@ static struct iv_avl_node *__iv_signal_find_first(int signum)
 	struct iv_avl_node *iter;
 	struct iv_avl_node *best;
 
-	for (iter = sig_interests.root, best = NULL; iter != NULL; ) {
+	for (iter = process_sigs.root, best = NULL; iter != NULL; ) {
 		struct iv_signal *is;
 
 		is = iv_container_of(iter, struct iv_signal, an);
@@ -152,9 +152,9 @@ static void __iv_signal_do_wake(int signum)
 
 static void iv_signal_handler(int signum)
 {
-	spin_lock(&sig_interests_lock);
+	spin_lock(&sig_lock);
 	__iv_signal_do_wake(signum);
-	spin_unlock(&sig_interests_lock);
+	spin_unlock(&sig_lock);
 }
 
 static void iv_signal_event(void *_this)
@@ -162,9 +162,9 @@ static void iv_signal_event(void *_this)
 	struct iv_signal *this = _this;
 	sigset_t mask;
 
-	spin_lock_sigmask(&sig_interests_lock, &mask);
+	spin_lock_sigmask(&sig_lock, &mask);
 	this->active = 0;
-	spin_unlock_sigmask(&sig_interests_lock, &mask);
+	spin_unlock_sigmask(&sig_lock, &mask);
 
 	this->handler(this->cookie);
 }
@@ -180,7 +180,7 @@ int iv_signal_register(struct iv_signal *this)
 
 	this->active = 0;
 
-	spin_lock_sigmask(&sig_interests_lock, &mask);
+	spin_lock_sigmask(&sig_lock, &mask);
 
 	if (__iv_signal_find_first(this->signum) == NULL) {
 		struct sigaction sa;
@@ -190,9 +190,9 @@ int iv_signal_register(struct iv_signal *this)
 		sa.sa_flags = SA_RESTART;
 		sigaction(this->signum, &sa, NULL);
 	}
-	iv_avl_tree_insert(&sig_interests, &this->an);
+	iv_avl_tree_insert(&process_sigs, &this->an);
 
-	spin_unlock_sigmask(&sig_interests_lock, &mask);
+	spin_unlock_sigmask(&sig_lock, &mask);
 
 	return 0;
 }
@@ -201,9 +201,9 @@ void iv_signal_unregister(struct iv_signal *this)
 {
 	sigset_t mask;
 
-	spin_lock_sigmask(&sig_interests_lock, &mask);
+	spin_lock_sigmask(&sig_lock, &mask);
 
-	iv_avl_tree_delete(&sig_interests, &this->an);
+	iv_avl_tree_delete(&process_sigs, &this->an);
 	if (__iv_signal_find_first(this->signum) == NULL) {
 		struct sigaction sa;
 
@@ -215,7 +215,7 @@ void iv_signal_unregister(struct iv_signal *this)
 		__iv_signal_do_wake(this->signum);
 	}
 
-	spin_unlock_sigmask(&sig_interests_lock, &mask);
+	spin_unlock_sigmask(&sig_lock, &mask);
 
 	iv_event_raw_unregister(&this->ev);
 }
