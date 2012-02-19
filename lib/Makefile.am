@@ -48,6 +48,7 @@ libivykis_la_SOURCES	= iv_avl.c			\
 			  $(KQUEUE_SRC)			\
 			  $(PORT_SRC)			\
 			  $(POLL_SRC)			\
+			  iv_rcu.c			\
 			  $(SELECT_SRC)			\
 			  iv_task.c			\
 			  iv_timer.c			\
@@ -56,6 +57,7 @@ libivykis_la_SOURCES	= iv_avl.c			\
 include_HEADERS		= include/iv.h			\
 			  include/iv_avl.h		\
 			  include/iv_list.h		\
+			  include/iv_rcu.h		\
 			  include/iv_tls.h
 
 noinst_HEADERS		= iv_private.h

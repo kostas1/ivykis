@@ -98,3 +98,11 @@ IVYKIS_0.30 {
 	iv_fatal;
 	iv_set_fatal_msg_handler;
 } IVYKIS_0.29;
+
+TEST {
+	# lib/iv_rcu
+	iv_rcu_read_lock;
+	iv_rcu_read_unlock;
+	iv_rcu_call;
+	iv_rcu_synchronize;
+};

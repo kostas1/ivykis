@@ -34,6 +34,12 @@ struct iv_state {
 	int			numfds;
 	int			quit;
 
+	/* iv_rcu.c  */
+	struct iv_list_head	rcu_thread_list;
+	pthread_mutex_t		rcu_lock;
+	int			rcu_read_lock_depth;
+	struct iv_list_head	rcu_heads;
+
 	/* iv_task.c  */
 	struct iv_list_head	tasks;
 
@@ -273,6 +279,11 @@ struct iv_fd_ *iv_fd_avl_find(struct iv_avl_tree *root, int fd);
 int iv_fd_avl_compare(struct iv_avl_node *_a, struct iv_avl_node *_b);
 void iv_fd_make_ready(struct iv_list_head *active,
 		      struct iv_fd_ *fd, int bands);
+
+/* iv_rcu.c */
+void iv_rcu_init_first(void);
+void iv_rcu_init(struct iv_state *st);
+void iv_rcu_deinit(struct iv_state *st);
 
 /* iv_task.c */
 void iv_task_init(struct iv_state *st);

@@ -126,6 +126,8 @@ static void iv_init_first_thread(struct iv_state *st)
 
 	if (method == NULL)
 		iv_fatal("iv_init: can't find suitable event dispatcher");
+
+	iv_rcu_init_first();
 }
 
 
@@ -140,6 +142,7 @@ static void __iv_deinit(struct iv_state *st)
 {
 	method->deinit(st);
 
+	iv_rcu_deinit(st);
 	iv_timer_deinit(st);
 	iv_tls_thread_deinit(st);
 
@@ -194,6 +197,7 @@ void iv_init(void)
 	st->handled_fd = NULL;
 	st->numfds = 0;
 
+	iv_rcu_init(st);
 	iv_task_init(st);
 	iv_timer_init(st);
 	iv_tls_thread_init(st);
