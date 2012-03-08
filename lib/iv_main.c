@@ -126,6 +126,8 @@ static void iv_init_first_thread(struct iv_state *st)
 
 	if (method == NULL)
 		iv_fatal("iv_init: can't find suitable event dispatcher");
+
+	iv_thread_sync_init_first();
 }
 
 
@@ -140,6 +142,7 @@ static void __iv_deinit(struct iv_state *st)
 {
 	method->deinit(st);
 
+	iv_thread_sync_deinit(st);
 	iv_timer_deinit(st);
 	iv_tls_thread_deinit(st);
 
@@ -195,6 +198,7 @@ void iv_init(void)
 	st->numfds = 0;
 
 	iv_task_init(st);
+	iv_thread_sync_init(st);
 	iv_timer_init(st);
 	iv_tls_thread_init(st);
 }
@@ -256,6 +260,8 @@ void iv_main(void)
 	struct iv_state *st = iv_get_state();
 	struct iv_list_head active;
 
+	flag_set(&st->thread_busy);
+
 	INIT_IV_LIST_HEAD(&active);
 
 	st->quit = 0;
@@ -268,16 +274,22 @@ void iv_main(void)
 		if (should_quit(st))
 			break;
 
+		flag_clear(&st->thread_busy);
+
 		if (iv_pending_tasks(st) || iv_get_soonest_timeout(st, &to)) {
 			to.tv_sec = 0;
 			to.tv_nsec = 0;
 		}
 		method->poll(st, &active, &to);
 
+		flag_set(&st->thread_busy);
+
 		__iv_invalidate_now(st);
 
 		iv_run_active_list(st, &active);
 	}
+
+	flag_clear(&st->thread_busy);
 }
 
 void iv_deinit(void)

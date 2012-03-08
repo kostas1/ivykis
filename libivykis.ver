@@ -98,3 +98,8 @@ IVYKIS_0.30 {
 	iv_fatal;
 	iv_set_fatal_msg_handler;
 } IVYKIS_0.29;
+
+TEST {
+	# lib/iv_thread_sync
+	iv_thread_sync;
+};

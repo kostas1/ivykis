@@ -56,6 +56,12 @@ void iv_invalidate_now(void);
 
 
 /*
+ * Thread synchronization.
+ */
+void iv_thread_sync(void);
+
+
+/*
  * File descriptor handling.
  */
 struct iv_fd {

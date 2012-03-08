@@ -50,6 +50,7 @@ libivykis_la_SOURCES	= iv_avl.c			\
 			  $(POLL_SRC)			\
 			  $(SELECT_SRC)			\
 			  iv_task.c			\
+			  iv_thread_sync.c		\
 			  iv_timer.c			\
 			  iv_tls.c
 

@@ -22,6 +22,7 @@
 #include "iv_avl.h"
 #include "iv_list.h"
 #include "config.h"
+#include "flag.h"
 
 /*
  * Per-thread state.
@@ -36,6 +37,11 @@ struct iv_state {
 
 	/* iv_task.c  */
 	struct iv_list_head	tasks;
+
+	/* iv_thread_sync.c  */
+	struct iv_list_head	thread_list;
+	flag_t			thread_traversing_thread_list;
+	flag_t			thread_busy;
 
 	/* iv_timer.c  */
 	struct timespec		time;
@@ -278,6 +284,11 @@ void iv_fd_make_ready(struct iv_list_head *active,
 void iv_task_init(struct iv_state *st);
 int iv_pending_tasks(struct iv_state *st);
 void iv_run_tasks(struct iv_state *st);
+
+/* iv_thread_sync.c */
+void iv_thread_sync_init_first(void);
+void iv_thread_sync_init(struct iv_state *st);
+void iv_thread_sync_deinit(struct iv_state *st);
 
 /* iv_timer.c */
 void __iv_invalidate_now(struct iv_state *st);

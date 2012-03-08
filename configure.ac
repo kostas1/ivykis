@@ -186,6 +186,27 @@ AC_SEARCH_LIBS([pthread_create], [pthread], [],
 	AC_SEARCH_LIBS([pthread_trace_notify_np], [pthread], [],
 		AC_MSG_ERROR(pthreads support is required to build ivykis.))))
 
+# Check for __sync_bool_compare_and_swap().  We can't use AC_CHECK_FUNCS
+# for this, as autoconf will spit out a dummy definition for the
+# function we are testing for, and call it without any arguments,
+# which will prevent gcc from using the intrinsic.
+AC_CACHE_CHECK(for __sync_bool_compare_and_swap(),
+	ac_cv_func_sync_bool_compare_and_swap,
+	[ac_cv_func_sync_bool_compare_and_swap=no
+	 _AC_LINK_IFELSE([AC_LANG_SOURCE(
+		int main()
+		{
+			int foo;
+			return __sync_bool_compare_and_swap(&foo, 1, 2);
+		}
+	 )], [ac_cv_func_sync_bool_compare_and_swap=yes], [])
+	])
+if test $ac_cv_func_sync_bool_compare_and_swap = yes
+then
+	AC_DEFINE(HAVE_SYNC_BOOL_COMPARE_AND_SWAP, 1,
+		  Define to 1 if system has __sync_bool_compare_and_swap)
+fi
+
 # Check for __sync_lock_test_and_set().  We can't use AC_CHECK_FUNCS
 # for this, as autoconf will spit out a dummy definition for the
 # function we are testing for, and call it without any arguments,
@@ -214,7 +235,7 @@ AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h limits.h netinet/in.h	\
 		  stddef.h stdlib.h string.h sys/ioctl.h sys/socket.h	\
 		  sys/time.h sys/wait.h syslog.h unistd.h], [],
 	AC_MSG_ERROR(some required header files not installed.))
-AC_CHECK_HEADERS([sys/devpoll.h sys/eventfd.h sys/select.h])
+AC_CHECK_HEADERS([linux/futex.h sys/devpoll.h sys/eventfd.h sys/select.h])
 
 # Check for <linux/netfilter_ipv4.h> header file.
 AC_CACHE_CHECK(for linux/netfilter_ipv4.h, ac_cv_header_linux_netfilter_ipv4_h,

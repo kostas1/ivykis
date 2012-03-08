@@ -10,6 +10,7 @@ noinst_PROGRAMS		= avl				\
 			  server			\
 			  server_thread			\
 			  struct_sizes			\
+			  thread_sync			\
 			  timer				\
 			  timer_rat
 
@@ -20,6 +21,7 @@ connectreset_SOURCES	= connectreset.c
 null_SOURCES		= null.c
 server_SOURCES		= server.c
 struct_sizes_SOURCES	= struct_sizes.c
+thread_sync_SOURCES	= thread_sync.c
 timer_SOURCES		= timer.c
 timer_rat_SOURCES	= timer_rat.c
 
