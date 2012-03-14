@@ -1,0 +1,26 @@
+#!/bin/sh
+
+ARGS=""
+
+NEED_SELECT=1
+for method in SYS_DEVPOLL_H EPOLL_CREATE KQUEUE POLL PORT_CREATE
+do
+	if grep -q "^#define HAVE_$method 1" config.h
+	then
+		ARGS="$ARGS -DHAVE_$method"
+		NEED_SELECT=0
+	else
+		ARGS="$ARGS -UHAVE_$method"
+	fi
+done
+
+if [ $NEED_SELECT == 1 ]
+then
+	ARGS="$ARGS -DNEED_SELECT"
+else
+	ARGS="$ARGS -UNEED_SELECT"
+fi
+
+sed "s|TIMESPEC_HEADER|$1|" | unifdef $ARGS
+
+exit 0

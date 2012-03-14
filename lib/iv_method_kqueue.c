@@ -51,7 +51,7 @@ static int iv_kqueue_init(struct iv_state *st)
 }
 
 static void
-iv_kqueue_queue_one(struct kevent *kev, int *_num, struct iv_fd_ *fd)
+iv_kqueue_queue_one(struct kevent *kev, int *_num, struct iv_fd *fd)
 {
 	int num;
 	int wanted;
@@ -104,7 +104,7 @@ iv_kqueue_upload(struct iv_state *st, struct kevent *kev, int size, int *num)
 	*num = 0;
 
 	while (!iv_list_empty(&st->kqueue.notify)) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 
 		if (*num > size - 2) {
 			int ret;
@@ -119,7 +119,7 @@ iv_kqueue_upload(struct iv_state *st, struct kevent *kev, int size, int *num)
 		}
 
 		fd = iv_list_entry(st->kqueue.notify.next,
-				   struct iv_fd_, list_notify);
+				   struct iv_fd, list_notify);
 
 		iv_kqueue_queue_one(kev, num, fd);
 		fd->registered_bands = fd->wanted_bands;
@@ -158,7 +158,7 @@ static void iv_kqueue_poll(struct iv_state *st,
 	}
 
 	for (i = 0; i < ret; i++) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 
 		fd = (void *)batch[i].udata;
 		if (batch[i].filter == EVFILT_READ) {
@@ -190,20 +190,20 @@ static void iv_kqueue_upload_all(struct iv_state *st)
 	}
 }
 
-static void iv_kqueue_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_kqueue_unregister_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	if (!iv_list_empty(&fd->list_notify))
 		iv_kqueue_upload_all(st);
 }
 
-static void iv_kqueue_notify_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_kqueue_notify_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	iv_list_del_init(&fd->list_notify);
 	if (fd->registered_bands != fd->wanted_bands)
 		iv_list_add_tail(&fd->list_notify, &st->kqueue.notify);
 }
 
-static int iv_kqueue_notify_fd_sync(struct iv_state *st, struct iv_fd_ *fd)
+static int iv_kqueue_notify_fd_sync(struct iv_state *st, struct iv_fd *fd)
 {
 	struct kevent kev[2];
 	int num;

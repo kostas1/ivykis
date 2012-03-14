@@ -53,7 +53,6 @@ if test x$ac_cv_timespec_hdr = x
 then
 	AC_MSG_ERROR(Can't find definition of struct timespec.)
 fi
-AC_SUBST(ac_cv_timespec_hdr)
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -144,7 +143,6 @@ AC_CONFIG_FILES([Makefile			\
 		 contrib/iv_getaddrinfo/Makefile	\
 		 contrib/kojines/Makefile	\
 		 lib/Makefile			\
-		 lib/include/iv.h		\
 		 lib/man3/Makefile		\
 		 lib/test/Makefile		\
 		 misc/Makefile			\
@@ -153,3 +151,7 @@ AC_CONFIG_FILES([Makefile			\
 		 modules/man3/Makefile		\
 		 modules/test/Makefile])
 AC_OUTPUT
+
+echo configure.ac: creating lib/include/iv.h
+mkdir -p $ac_pwd/lib/include
+$ac_abs_confdir/misc/generate_iv_h $ac_cv_timespec_hdr < $ac_abs_confdir/lib/include/iv.h.in > $ac_pwd/lib/include/iv.h

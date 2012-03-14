@@ -219,9 +219,9 @@ void iv_quit(void)
 static void iv_run_active_list(struct iv_state *st, struct iv_list_head *active)
 {
 	while (!iv_list_empty(active)) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 
-		fd = iv_list_entry(active->next, struct iv_fd_, list_active);
+		fd = iv_list_entry(active->next, struct iv_fd, list_active);
 		iv_list_del_init(&fd->list_active);
 
 		st->handled_fd = fd;

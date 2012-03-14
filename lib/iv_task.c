@@ -38,26 +38,18 @@ void iv_run_tasks(struct iv_state *st)
 
 	__iv_list_steal_elements(&st->tasks, &tasks);
 	while (!iv_list_empty(&tasks)) {
-		struct iv_task_ *t;
+		struct iv_task *t;
 
-		t = iv_list_entry(tasks.next, struct iv_task_, list);
+		t = iv_list_entry(tasks.next, struct iv_task, list);
 		iv_list_del_init(&t->list);
 
 		t->handler(t->cookie);
 	}
 }
 
-void IV_TASK_INIT(struct iv_task *_t)
-{
-	struct iv_task_ *t = (struct iv_task_ *)_t;
-
-	INIT_IV_LIST_HEAD(&t->list);
-}
-
-void iv_task_register(struct iv_task *_t)
+void iv_task_register(struct iv_task *t)
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_task_ *t = (struct iv_task_ *)_t;
 
 	if (!iv_list_empty(&t->list))
 		iv_fatal("iv_task_register: called with task still on a list");
@@ -65,19 +57,15 @@ void iv_task_register(struct iv_task *_t)
 	iv_list_add_tail(&t->list, &st->tasks);
 }
 
-void iv_task_unregister(struct iv_task *_t)
+void iv_task_unregister(struct iv_task *t)
 {
-	struct iv_task_ *t = (struct iv_task_ *)_t;
-
 	if (iv_list_empty(&t->list))
 		iv_fatal("iv_task_unregister: called with task not on a list");
 
 	iv_list_del_init(&t->list);
 }
 
-int iv_task_registered(struct iv_task *_t)
+int iv_task_registered(struct iv_task *t)
 {
-	struct iv_task_ *t = (struct iv_task_ *)_t;
-
 	return !iv_list_empty(&t->list);
 }

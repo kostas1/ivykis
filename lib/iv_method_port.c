@@ -54,7 +54,7 @@ static int bits_to_poll_mask(int bits)
 	return mask;
 }
 
-static int __iv_port_upload_one(struct iv_state *st, struct iv_fd_ *fd)
+static int __iv_port_upload_one(struct iv_state *st, struct iv_fd *fd)
 {
 	int ret;
 
@@ -72,7 +72,7 @@ static int __iv_port_upload_one(struct iv_state *st, struct iv_fd_ *fd)
 	return ret;
 }
 
-static void iv_port_upload_one(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_port_upload_one(struct iv_state *st, struct iv_fd *fd)
 {
 	if (__iv_port_upload_one(st, fd) < 0) {
 		iv_fatal("iv_port_upload_one: got error %d[%s]", errno,
@@ -83,10 +83,10 @@ static void iv_port_upload_one(struct iv_state *st, struct iv_fd_ *fd)
 static void iv_port_upload(struct iv_state *st)
 {
 	while (!iv_list_empty(&st->port.notify)) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 
 		fd = iv_list_entry(st->port.notify.next,
-				   struct iv_fd_, list_notify);
+				   struct iv_fd, list_notify);
 
 		iv_port_upload_one(st, fd);
 	}
@@ -115,7 +115,7 @@ poll_more:
 
 	for (i = 0; i < nget; i++) {
 		int revents = pe[i].portev_events;
-		struct iv_fd_ *fd = pe[i].portev_user;
+		struct iv_fd *fd = pe[i].portev_user;
 
 		if (revents & (POLLIN | POLLERR | POLLHUP))
 			iv_fd_make_ready(active, fd, MASKIN);
@@ -140,20 +140,20 @@ poll_more:
 	}
 }
 
-static void iv_port_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_port_unregister_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	if (!iv_list_empty(&fd->list_notify))
 		iv_port_upload_one(st, fd);
 }
 
-static void iv_port_notify_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_port_notify_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	iv_list_del_init(&fd->list_notify);
 	if (fd->registered_bands != fd->wanted_bands)
 		iv_list_add_tail(&fd->list_notify, &st->port.notify);
 }
 
-static int iv_port_notify_fd_sync(struct iv_state *st, struct iv_fd_ *fd)
+static int iv_port_notify_fd_sync(struct iv_state *st, struct iv_fd *fd)
 {
 	return __iv_port_upload_one(st, fd);
 }

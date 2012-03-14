@@ -25,15 +25,15 @@
 
 #if defined(HAVE_SYS_DEVPOLL_H) || defined(NEED_SELECT)
 /* file descriptor avl tree handling ****************************************/
-struct iv_fd_ *iv_fd_avl_find(struct iv_avl_tree *root, int fd)
+struct iv_fd *iv_fd_avl_find(struct iv_avl_tree *root, int fd)
 {
 	struct iv_avl_node *an;
 
 	an = root->root;
 	while (an != NULL) {
-		struct iv_fd_ *p;
+		struct iv_fd *p;
 
-		p = iv_container_of(an, struct iv_fd_, avl_node);
+		p = iv_container_of(an, struct iv_fd, avl_node);
 		if (fd == p->fd)
 			return p;
 
@@ -48,8 +48,8 @@ struct iv_fd_ *iv_fd_avl_find(struct iv_avl_tree *root, int fd)
 
 int iv_fd_avl_compare(struct iv_avl_node *_a, struct iv_avl_node *_b)
 {
-	struct iv_fd_ *a = iv_container_of(_a, struct iv_fd_, avl_node);
-	struct iv_fd_ *b = iv_container_of(_b, struct iv_fd_, avl_node);
+	struct iv_fd *a = iv_container_of(_a, struct iv_fd, avl_node);
+	struct iv_fd *b = iv_container_of(_b, struct iv_fd, avl_node);
 
 	if (a->fd < b->fd)
 		return -1;
@@ -63,18 +63,7 @@ int iv_fd_avl_compare(struct iv_avl_node *_a, struct iv_avl_node *_b)
 
 
 /* file descriptor handling *************************************************/
-void IV_FD_INIT(struct iv_fd *_fd)
-{
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
-
-	fd->fd = -1;
-	fd->handler_in = NULL;
-	fd->handler_out = NULL;
-	fd->handler_err = NULL;
-	fd->registered = 0;
-}
-
-static void recompute_wanted_flags(struct iv_fd_ *fd)
+static void recompute_wanted_flags(struct iv_fd *fd)
 {
 	int wanted;
 
@@ -91,14 +80,14 @@ static void recompute_wanted_flags(struct iv_fd_ *fd)
 	fd->wanted_bands = wanted;
 }
 
-static void notify_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void notify_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	recompute_wanted_flags(fd);
 
 	method->notify_fd(st, fd);
 }
 
-static void iv_fd_register_prologue(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_fd_register_prologue(struct iv_state *st, struct iv_fd *fd)
 {
 	if (fd->registered) {
 		iv_fatal("iv_fd_register: called with fd which is "
@@ -123,7 +112,7 @@ static void iv_fd_register_prologue(struct iv_state *st, struct iv_fd_ *fd)
 		method->register_fd(st, fd);
 }
 
-static void iv_fd_register_epilogue(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_fd_register_epilogue(struct iv_state *st, struct iv_fd *fd)
 {
 	int flags;
 	int yes;
@@ -146,10 +135,9 @@ static void iv_fd_register_epilogue(struct iv_state *st, struct iv_fd_ *fd)
 	setsockopt(fd->fd, SOL_SOCKET, SO_OOBINLINE, &yes, sizeof(yes));
 }
 
-void iv_fd_register(struct iv_fd *_fd)
+void iv_fd_register(struct iv_fd *fd)
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
 
 	iv_fd_register_prologue(st, fd);
 
@@ -158,10 +146,9 @@ void iv_fd_register(struct iv_fd *_fd)
 	iv_fd_register_epilogue(st, fd);
 }
 
-int iv_fd_register_try(struct iv_fd *_fd)
+int iv_fd_register_try(struct iv_fd *fd)
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
 	int ret;
 
 	iv_fd_register_prologue(st, fd);
@@ -179,10 +166,9 @@ int iv_fd_register_try(struct iv_fd *_fd)
 	return 0;
 }
 
-void iv_fd_unregister(struct iv_fd *_fd)
+void iv_fd_unregister(struct iv_fd *fd)
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
 
 	if (!fd->registered) {
 		iv_fatal("iv_fd_unregister: called with fd which is "
@@ -202,14 +188,12 @@ void iv_fd_unregister(struct iv_fd *_fd)
 		st->handled_fd = NULL;
 }
 
-int iv_fd_registered(struct iv_fd *_fd)
+int iv_fd_registered(struct iv_fd *fd)
 {
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
-
 	return fd->registered;
 }
 
-void iv_fd_make_ready(struct iv_list_head *active, struct iv_fd_ *fd, int bands)
+void iv_fd_make_ready(struct iv_list_head *active, struct iv_fd *fd, int bands)
 {
 	if (iv_list_empty(&fd->list_active)) {
 		fd->ready_bands = 0;
@@ -218,10 +202,9 @@ void iv_fd_make_ready(struct iv_list_head *active, struct iv_fd_ *fd, int bands)
 	fd->ready_bands |= bands;
 }
 
-void iv_fd_set_handler_in(struct iv_fd *_fd, void (*handler_in)(void *))
+void iv_fd_set_handler_in(struct iv_fd *fd, void (*handler_in)(void *))
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
 
 	if (!fd->registered) {
 		iv_fatal("iv_fd_set_handler_in: called with fd which "
@@ -232,10 +215,9 @@ void iv_fd_set_handler_in(struct iv_fd *_fd, void (*handler_in)(void *))
 	notify_fd(st, fd);
 }
 
-void iv_fd_set_handler_out(struct iv_fd *_fd, void (*handler_out)(void *))
+void iv_fd_set_handler_out(struct iv_fd *fd, void (*handler_out)(void *))
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
 
 	if (!fd->registered) {
 		iv_fatal("iv_fd_set_handler_out: called with fd which "
@@ -246,10 +228,9 @@ void iv_fd_set_handler_out(struct iv_fd *_fd, void (*handler_out)(void *))
 	notify_fd(st, fd);
 }
 
-void iv_fd_set_handler_err(struct iv_fd *_fd, void (*handler_err)(void *))
+void iv_fd_set_handler_err(struct iv_fd *fd, void (*handler_err)(void *))
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_fd_ *fd = (struct iv_fd_ *)_fd;
 
 	if (!fd->registered) {
 		iv_fatal("iv_fd_set_handler_err: called with fd which "

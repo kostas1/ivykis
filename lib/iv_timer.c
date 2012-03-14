@@ -93,25 +93,18 @@ struct timespec *__iv_now_location(void)
 #define SPLIT_MAX		(1 << (SPLIT_BITS * SPLIT_LEVELS))
 struct ratnode { void *child[SPLIT_NODES]; };
 
-void IV_TIMER_INIT(struct iv_timer *_t)
-{
-	struct iv_timer_ *t = (struct iv_timer_ *)_t;
-
-	t->index = -1;
-}
-
 static inline int timespec_gt(struct timespec *a, struct timespec *b)
 {
 	return !!(a->tv_sec > b->tv_sec ||
 		 (a->tv_sec == b->tv_sec && a->tv_nsec > b->tv_nsec));
 }
 
-static inline int timer_ptr_gt(struct iv_timer_ *a, struct iv_timer_ *b)
+static inline int timer_ptr_gt(struct iv_timer *a, struct iv_timer *b)
 {
 	return timespec_gt(&a->expires, &b->expires);
 }
 
-static struct iv_timer_ **get_node(struct iv_state *st, int index)
+static struct iv_timer **get_node(struct iv_state *st, int index)
 {
 	struct ratnode **r;
 	int i;
@@ -133,7 +126,7 @@ static struct iv_timer_ **get_node(struct iv_state *st, int index)
 		r = (struct ratnode **)&((*r)->child[bits]);
 	}
 
-	return (struct iv_timer_ **)r;
+	return (struct iv_timer **)r;
 }
 
 void iv_timer_init(struct iv_state *st)
@@ -150,7 +143,7 @@ int iv_pending_timers(struct iv_state *st)
 int iv_get_soonest_timeout(struct iv_state *st, struct timespec *to)
 {
 	if (st->num_timers) {
-		struct iv_timer_ *t = *get_node(st, 1);
+		struct iv_timer *t = *get_node(st, 1);
 
 		iv_validate_now();
 		to->tv_sec = t->expires.tv_sec - st->time.tv_sec;
@@ -193,12 +186,12 @@ void iv_timer_deinit(struct iv_state *st)
 	st->timer_root = NULL;
 }
 
-static void pull_up(struct iv_state *st, int index, struct iv_timer_ **i)
+static void pull_up(struct iv_state *st, int index, struct iv_timer **i)
 {
 	while (index != 1) {
-		struct iv_timer_ *et;
+		struct iv_timer *et;
 		int parent;
-		struct iv_timer_ **p;
+		struct iv_timer **p;
 
 		parent = index / 2;
 		p = get_node(st, parent);
@@ -218,11 +211,10 @@ static void pull_up(struct iv_state *st, int index, struct iv_timer_ **i)
 	}
 }
 
-void iv_timer_register(struct iv_timer *_t)
+void iv_timer_register(struct iv_timer *t)
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_timer_ *t = (struct iv_timer_ *)_t;
-	struct iv_timer_ **p;
+	struct iv_timer **p;
 	int index;
 
 	if (t->index != -1) {
@@ -241,18 +233,18 @@ void iv_timer_register(struct iv_timer *_t)
 	pull_up(st, index, p);
 }
 
-static void push_down(struct iv_state *st, int index, struct iv_timer_ **i)
+static void push_down(struct iv_state *st, int index, struct iv_timer **i)
 {
 	while (1) {
-		struct iv_timer_ *et;
-		struct iv_timer_ **imin;
+		struct iv_timer *et;
+		struct iv_timer **imin;
 		int index_min;
 
 		index_min = index;
 		imin = i;
 
 		if (2 * index <= st->num_timers) {
-			struct iv_timer_ **p;
+			struct iv_timer **p;
 
 			p = get_node(st, 2 * index);
 			if (timer_ptr_gt(*imin, p[0])) {
@@ -280,12 +272,11 @@ static void push_down(struct iv_state *st, int index, struct iv_timer_ **i)
 	}
 }
 
-void iv_timer_unregister(struct iv_timer *_t)
+void iv_timer_unregister(struct iv_timer *t)
 {
 	struct iv_state *st = iv_get_state();
-	struct iv_timer_ *t = (struct iv_timer_ *)_t;
-	struct iv_timer_ **m;
-	struct iv_timer_ **p;
+	struct iv_timer **m;
+	struct iv_timer **p;
 
 	if (t->index == -1) {
 		iv_fatal("iv_timer_unregister: called with timer not "
@@ -320,7 +311,7 @@ void iv_timer_unregister(struct iv_timer *_t)
 void iv_run_timers(struct iv_state *st)
 {
 	while (st->num_timers) {
-		struct iv_timer_ *t = *get_node(st, 1);
+		struct iv_timer *t = *get_node(st, 1);
 
 		__iv_validate_now(st);
 		if (timespec_gt(&t->expires, &st->time))
@@ -330,9 +321,7 @@ void iv_run_timers(struct iv_state *st)
 	}
 }
 
-int iv_timer_registered(struct iv_timer *_t)
+int iv_timer_registered(struct iv_timer *t)
 {
-	struct iv_timer_ *t = (struct iv_timer_ *)_t;
-
 	return !(t->index == -1);
 }

@@ -70,7 +70,7 @@ static int bits_to_poll_mask(int bits)
 	return mask;
 }
 
-static int __iv_epoll_flush_one(struct iv_state *st, struct iv_fd_ *fd)
+static int __iv_epoll_flush_one(struct iv_state *st, struct iv_fd *fd)
 {
 	int op;
 	struct epoll_event event;
@@ -100,7 +100,7 @@ static int __iv_epoll_flush_one(struct iv_state *st, struct iv_fd_ *fd)
 	return ret;
 }
 
-static void iv_epoll_flush_one(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_epoll_flush_one(struct iv_state *st, struct iv_fd *fd)
 {
 	if (__iv_epoll_flush_one(st, fd) < 0) {
 		iv_fatal("iv_epoll_flush_one: got error %d[%s]",
@@ -111,10 +111,10 @@ static void iv_epoll_flush_one(struct iv_state *st, struct iv_fd_ *fd)
 static void iv_epoll_flush_pending(struct iv_state *st)
 {
 	while (!iv_list_empty(&st->epoll.notify)) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 
 		fd = iv_list_entry(st->epoll.notify.next,
-				   struct iv_fd_, list_notify);
+				   struct iv_fd, list_notify);
 
 		iv_epoll_flush_one(st, fd);
 	}
@@ -142,7 +142,7 @@ static void iv_epoll_poll(struct iv_state *st,
 	}
 
 	for (i = 0; i < ret; i++) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 		uint32_t events;
 
 		fd = batch[i].data.ptr;
@@ -159,20 +159,20 @@ static void iv_epoll_poll(struct iv_state *st,
 	}
 }
 
-static void iv_epoll_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_epoll_unregister_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	if (!iv_list_empty(&fd->list_notify))
 		iv_epoll_flush_one(st, fd);
 }
 
-static void iv_epoll_notify_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_epoll_notify_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	iv_list_del_init(&fd->list_notify);
 	if (fd->registered_bands != fd->wanted_bands)
 		iv_list_add_tail(&fd->list_notify, &st->epoll.notify);
 }
 
-static int iv_epoll_notify_fd_sync(struct iv_state *st, struct iv_fd_ *fd)
+static int iv_epoll_notify_fd_sync(struct iv_state *st, struct iv_fd *fd)
 {
 	return __iv_epoll_flush_one(st, fd);
 }

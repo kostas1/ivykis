@@ -104,7 +104,7 @@ static void iv_select_poll(struct iv_state *st,
 		pollin = !!FD_ISSET(i, readfds(st));
 		pollout = !!FD_ISSET(i, writefds(st));
 		if (pollin || pollout) {
-			struct iv_fd_ *fd;
+			struct iv_fd *fd;
 
 			fd = iv_fd_avl_find(&st->select.fds, i);
 			if (fd == NULL)
@@ -119,7 +119,7 @@ static void iv_select_poll(struct iv_state *st,
 	}
 }
 
-static void iv_select_register_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_select_register_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	int ret;
 
@@ -133,7 +133,7 @@ static void iv_select_register_fd(struct iv_state *st, struct iv_fd_ *fd)
 		st->select.fd_max = fd->fd;
 }
 
-static void iv_select_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_select_unregister_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	iv_avl_tree_delete(&st->select.fds, &fd->avl_node);
 
@@ -142,9 +142,9 @@ static void iv_select_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
 
 		an = iv_avl_tree_max(&st->select.fds);
 		if (an != NULL) {
-			struct iv_fd_ *fd;
+			struct iv_fd *fd;
 
-			fd = iv_container_of(an, struct iv_fd_, avl_node);
+			fd = iv_container_of(an, struct iv_fd, avl_node);
 			st->select.fd_max = fd->fd;
 		} else {
 			st->select.fd_max = 0;
@@ -152,7 +152,7 @@ static void iv_select_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
 	}
 }
 
-static void iv_select_notify_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_select_notify_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	if (fd->wanted_bands & MASKIN)
 		FD_SET(fd->fd, readfds_master(st));
@@ -167,7 +167,7 @@ static void iv_select_notify_fd(struct iv_state *st, struct iv_fd_ *fd)
 	fd->registered_bands = fd->wanted_bands;
 }
 
-static int iv_select_notify_fd_sync(struct iv_state *st, struct iv_fd_ *fd)
+static int iv_select_notify_fd_sync(struct iv_state *st, struct iv_fd *fd)
 {
 	int bytes;
 	struct timeval tv = { 0, 0 };

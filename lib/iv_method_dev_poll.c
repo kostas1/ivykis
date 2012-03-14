@@ -88,7 +88,7 @@ static void iv_dev_poll_flush_pending(struct iv_state *st)
 
 	while (!iv_list_empty(&st->dev_poll.notify)) {
 		struct iv_list_head *ilh;
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 
 		if (num > UPLOAD_BATCH - 2) {
 			xwrite(poll_fd, pfd, num * sizeof(pfd[0]));
@@ -98,7 +98,7 @@ static void iv_dev_poll_flush_pending(struct iv_state *st)
 		ilh = st->dev_poll.notify.next;
 		iv_list_del_init(ilh);
 
-		fd = iv_list_entry(ilh, struct iv_fd_, list_notify);
+		fd = iv_list_entry(ilh, struct iv_fd, list_notify);
 
 		if (fd->registered_bands & ~fd->wanted_bands) {
 			pfd[num].fd = fd->fd;
@@ -143,7 +143,7 @@ static void iv_dev_poll_poll(struct iv_state *st,
 	}
 
 	for (i = 0; i < ret; i++) {
-		struct iv_fd_ *fd;
+		struct iv_fd *fd;
 		int revents;
 
 		fd = iv_fd_avl_find(&st->dev_poll.fds, batch[i].fd);
@@ -165,7 +165,7 @@ static void iv_dev_poll_poll(struct iv_state *st,
 	}
 }
 
-static void iv_dev_poll_register_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_dev_poll_register_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	int ret;
 
@@ -176,7 +176,7 @@ static void iv_dev_poll_register_fd(struct iv_state *st, struct iv_fd_ *fd)
 	}
 }
 
-static void iv_dev_poll_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_dev_poll_unregister_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	iv_avl_tree_delete(&st->dev_poll.fds, &fd->avl_node);
 
@@ -184,14 +184,14 @@ static void iv_dev_poll_unregister_fd(struct iv_state *st, struct iv_fd_ *fd)
 		iv_dev_poll_flush_pending(st);
 }
 
-static void iv_dev_poll_notify_fd(struct iv_state *st, struct iv_fd_ *fd)
+static void iv_dev_poll_notify_fd(struct iv_state *st, struct iv_fd *fd)
 {
 	iv_list_del_init(&fd->list_notify);
 	if (fd->registered_bands != fd->wanted_bands)
 		iv_list_add_tail(&fd->list_notify, &st->dev_poll.notify);
 }
 
-static int iv_dev_poll_notify_fd_sync(struct iv_state *st, struct iv_fd_ *fd)
+static int iv_dev_poll_notify_fd_sync(struct iv_state *st, struct iv_fd *fd)
 {
 	int num;
 	struct pollfd pfd[2];

@@ -21,37 +21,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iv.h>
-#include "../iv_private.h"
 
 int main()
 {
-	int fail;
-
-	fail = 0;
-
 	printf("struct iv_fd: %d\n", (int)sizeof(struct iv_fd));
-	printf("struct iv_fd_: %d\n", (int)sizeof(struct iv_fd_));
-	if (sizeof(struct iv_fd) < sizeof(struct iv_fd_)) {
-		printf("\t=> TOO SMALL\n");
-		fail = 1;
-	}
-	printf("\n");
-
 	printf("struct iv_task: %d\n", (int)sizeof(struct iv_task));
-	printf("struct iv_task_: %d\n", (int)sizeof(struct iv_task_));
-	if (sizeof(struct iv_task) < sizeof(struct iv_task_)) {
-		printf("\t=> TOO SMALL\n");
-		fail = 1;
-	}
-	printf("\n");
-
 	printf("struct iv_timer: %d\n", (int)sizeof(struct iv_timer));
-	printf("struct iv_timer_: %d\n", (int)sizeof(struct iv_timer_));
-	if (sizeof(struct iv_timer) < sizeof(struct iv_timer_)) {
-		printf("\t=> TOO SMALL\n");
-		fail = 1;
-	}
-	printf("\n");
 
-	return fail;
+	return 0;
 }

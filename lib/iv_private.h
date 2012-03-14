@@ -30,7 +30,7 @@
 
 struct iv_state {
 	/* iv_main.c  */
-	struct iv_fd_		*handled_fd;
+	struct iv_fd		*handled_fd;
 	int			numfds;
 	int			quit;
 
@@ -74,7 +74,7 @@ struct iv_state {
 #undef NEED_SELECT
 		struct {
 			struct pollfd		*pfds;
-			struct iv_fd_		**fds;
+			struct iv_fd		**fds;
 			int			num_registered_fds;
 		} poll;
 #endif
@@ -123,104 +123,6 @@ static inline void barrier(void)
 
 
 /*
- * Private versions of the fd/task/timer structures, exposing their
- * internal state.  The user data fields of these structures MUST
- * match the definitions in the public header file iv.h.
- */
-struct iv_fd_ {
-	/*
-	 * User data.
-	 */
-	int			fd;
-	void			*cookie;
-	void			(*handler_in)(void *);
-	void			(*handler_out)(void *);
-	void			(*handler_err)(void *);
-
-	/*
-	 * If this fd gathered any events during this polling round,
-	 * fd->list_active will be on iv_main()'s active list, and
-	 * fd->ready_bands will indicate which bands are currently
-	 * active.
-	 */
-	struct iv_list_head	list_active;
-	unsigned		ready_bands:3;
-
-	/*
-	 * Reflects whether the fd has been registered with
-	 * iv_fd_register().  Will be zero in ->notify_fd() if the
-	 * fd is being unregistered.
-	 */
-	unsigned		registered:1;
-
-	/*
-	 * ->wanted_bands is set by the ivykis core to indicate
-	 * which bands currenty have handlers registered for them.
-	 */
-	unsigned		wanted_bands:3;
-
-	/*
-	 * ->registered_bands is maintained by the poll method to
-	 * indicate which bands are currently registered with the
-	 * kernel, so that the ivykis core knows when to call
-	 * the poll method's ->notify_fd() on an fd.
-	 */
-	unsigned		registered_bands:3;
-
-#if defined(HAVE_SYS_DEVPOLL_H) || defined(HAVE_EPOLL_CREATE) ||	\
-    defined(HAVE_KQUEUE) || defined(HAVE_PORT_CREATE)
-	/*
-	 * ->list_notify is used by poll methods that defer updating
-	 * kernel registrations to ->poll() time.
-         */
-	struct iv_list_head	list_notify;
-#endif
-
-	/*
-	 * This is for state internal to some of the poll methods:
-	 * ->avl_node is used by poll methods that maintain an
-	 * internal fd tree, and ->index is used by iv_method_poll
-	 * to maintain the index of this fd in the list of pollfds.
-	 */
-	union {
-#if defined(HAVE_SYS_DEVPOLL_H) || defined(NEED_SELECT)
-		struct iv_avl_node	avl_node;
-#endif
-#ifdef HAVE_POLL
-		int			index;
-#endif
-	};
-};
-
-struct iv_task_ {
-	/*
-	 * User data.
-	 */
-	void			*cookie;
-	void			(*handler)(void *);
-
-	/*
-	 * Private data.
-	 */
-	struct iv_list_head	list;
-};
-
-struct iv_timer_ {
-	/*
-	 * User data.
-	 */
-	struct timespec		expires;
-	void			*cookie;
-	void			(*handler)(void *);
-
-	/*
-	 * Private data.
-	 */
-	int			index;
-};
-
-
-/*
  * Misc internal stuff.
  */
 #define MASKIN		1
@@ -232,10 +134,10 @@ struct iv_poll_method {
 	int	(*init)(struct iv_state *st);
 	void	(*poll)(struct iv_state *st, 
 			struct iv_list_head *active, struct timespec *to);
-	void	(*register_fd)(struct iv_state *st, struct iv_fd_ *fd);
-	void	(*unregister_fd)(struct iv_state *st, struct iv_fd_ *fd);
-	void	(*notify_fd)(struct iv_state *st, struct iv_fd_ *fd);
-	int	(*notify_fd_sync)(struct iv_state *st, struct iv_fd_ *fd);
+	void	(*register_fd)(struct iv_state *st, struct iv_fd *fd);
+	void	(*unregister_fd)(struct iv_state *st, struct iv_fd *fd);
+	void	(*notify_fd)(struct iv_state *st, struct iv_fd *fd);
+	int	(*notify_fd_sync)(struct iv_state *st, struct iv_fd *fd);
 	void	(*deinit)(struct iv_state *st);
 };
 
@@ -269,10 +171,10 @@ extern struct iv_poll_method iv_method_select;
 
 
 /* iv_fd.c */
-struct iv_fd_ *iv_fd_avl_find(struct iv_avl_tree *root, int fd);
+struct iv_fd *iv_fd_avl_find(struct iv_avl_tree *root, int fd);
 int iv_fd_avl_compare(struct iv_avl_node *_a, struct iv_avl_node *_b);
 void iv_fd_make_ready(struct iv_list_head *active,
-		      struct iv_fd_ *fd, int bands);
+		      struct iv_fd *fd, int bands);
 
 /* iv_task.c */
 void iv_task_init(struct iv_state *st);
