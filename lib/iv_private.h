@@ -157,7 +157,7 @@ struct iv_fd_ {
 	 * ->wanted_bands is set by the ivykis core to indicate
 	 * which bands currenty have handlers registered for them.
 	 */
-	unsigned		wanted_bands:3;
+	unsigned		wanted_bands:4;
 
 	/*
 	 * ->registered_bands is maintained by the poll method to
@@ -165,7 +165,7 @@ struct iv_fd_ {
 	 * kernel, so that the ivykis core knows when to call
 	 * the poll method's ->notify_fd() on an fd.
 	 */
-	unsigned		registered_bands:3;
+	unsigned		registered_bands:4;
 
 #if defined(HAVE_SYS_DEVPOLL_H) || defined(HAVE_EPOLL_CREATE) ||	\
     defined(HAVE_KQUEUE) || defined(HAVE_PORT_CREATE)
@@ -226,6 +226,7 @@ struct iv_timer_ {
 #define MASKIN		1
 #define MASKOUT		2
 #define MASKERR		4
+#define MASKONESHOT	8
 
 struct iv_poll_method {
 	char	*name;

@@ -64,8 +64,11 @@ static int bits_to_poll_mask(int bits)
 	mask = 0;
 	if (bits & MASKIN)
 		mask |= EPOLLIN;
-	if (bits & MASKOUT)
+	if (bits & MASKOUT) {
 		mask |= EPOLLOUT;
+		if (bits == MASKOUT)
+			mask |= EPOLLONESHOT;
+	}
 
 	return mask;
 }
@@ -94,8 +97,11 @@ static int __iv_epoll_flush_one(struct iv_state *st, struct iv_fd_ *fd)
 		ret = epoll_ctl(st->u.epoll.epoll_fd, op, fd->fd, &event);
 	} while (ret < 0 && errno == EINTR);
 
-	if (ret == 0)
+	if (ret == 0) {
 		fd->registered_bands = fd->wanted_bands;
+		if (event.events & EPOLLONESHOT)
+			fd->registered_bands |= MASKONESHOT;
+	}
 
 	return ret;
 }
@@ -156,6 +162,11 @@ static void iv_epoll_poll(struct iv_state *st,
 
 		if (events & (EPOLLERR | EPOLLHUP))
 			iv_fd_make_ready(active, fd, MASKERR);
+
+		if (fd->registered_bands & MASKONESHOT) {
+			fd->registered_bands = MASKONESHOT;
+			iv_list_add_tail(&fd->list_notify, &st->epoll.notify);
+		}
 	}
 }
 
