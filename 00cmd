@@ -1,0 +1,12 @@
+ip netns add testing
+ip link add v0 type veth peer name v1 netns testing
+ip addr add 172.16.0.1/20 brd + dev v0
+ip link set v0 up
+ip netns exec testing /bin/sh
+=>
+ifconfig lo 127.0.0.1
+ip addr add 172.16.0.2/20 brd + dev v1
+ip link set v1 up
+ip route add default via 172.16.0.1
+exit
+<=
