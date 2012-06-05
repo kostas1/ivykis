@@ -1,0 +1,73 @@
+
+krūva notes, 2012/06/05
+
+additional socket module bits
+-----------------------------
+have posix 'local' stack do dns resolution
+
+'local' stack implementation on top of winsock
+	=> sans netns
+	=> needs iv_handle support in įvykis
+
+kru_stack_socks4/4a/5(topstack, "tcp://127.0.0.1:1080");
+	=> allow setting local/remote DNS
+
+kru_stack_http_connect(topstack, "tcp://127.0.0.1:80");
+	=> shortcut to kru_socket_local once connection is up and
+	   we're not using chunked transfer encoding and etc
+	=> Allow setting X-Forwarded-For: and other headers
+
+kru_stack_ssh(topstack, "ssh://192.168.1.1:22/");
+	=> allow setting auth info
+
+kru_stack_websocket(topstack, "ws://192.168.1.1:1234/resource")
+	=> over SPDY?
+
+kru_stack_openvpn() ?
+
+kru_stack_pptp() ?
+
+
+
+additional stack operations
+- generic property get/set?
+  - kru_stack_set(stack, "property", "value");
+  - kru_stack_get(stack, "property");
+- not: socketpair
+
+additional socket operations
+- connect with port arg?
+- listen/accept?
+- get{peer,sock}name?
+- [gs]etsockopt -> property get/set?
+  - kru_socket_set(sock, "property", "value"):
+  - kru_socket_get(sock, "property");
+
+implement generic kru_socket_gets?
+- easy if we have MSG_PEEK
+
+don't do recvmsg/sendmsg
+- we don't do iovs/anc. data
+- but we do need to find a way to handle splice()
+
+==============================================================================
+
+handle ssl via a fake intermediate stack?
+- kru_stack_ssl(topstack);
+- set sock props before connect()
+- same api offered by gnutls/openssl/securechannel/whatever backends
+- cache instances by topstack
+
+==============================================================================
+
+different DNS resolver context per netns?
+
+==============================================================================
+
+how to do blocking ops?  create helper thread?
+	=> socksify/kruvify/whatever preload that does this
+
+two different client use cases:
+- firefox (socket api)
+- qemu/kvm (packet api) (disregarding slirp)
+
