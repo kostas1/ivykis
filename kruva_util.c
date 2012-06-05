@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <string.h>
 
 int addr_to_sockaddr(struct sockaddr_storage *sa, char *addr)
 {

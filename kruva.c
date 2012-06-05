@@ -111,11 +111,22 @@ int kru_socket_connect(struct kru_socket *kso, char *addr)
 	return kso->ops->connect(kso, addr);
 }
 
+int kru_socket_recv(struct kru_socket *kso, void *buf, size_t len, int flags)
+{
+	return kso->ops->recvfrom(kso, buf, len, flags, NULL, NULL);
+}
+
 int kru_socket_recvfrom(struct kru_socket *kso, void *buf, size_t len,
 			int flags, struct sockaddr *src_addr,
 			socklen_t *addrlen)
 {
 	return kso->ops->recvfrom(kso, buf, len, flags, src_addr, addrlen);
+}
+
+int kru_socket_send(struct kru_socket *kso, const void *buf, size_t len,
+		    int flags)
+{
+	return kso->ops->sendto(kso, buf, len, flags, NULL, 0);
 }
 
 int kru_socket_sendto(struct kru_socket *kso, const void *buf, size_t len,

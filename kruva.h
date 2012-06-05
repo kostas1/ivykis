@@ -36,9 +36,12 @@ void kru_socket_set_handler_out(struct kru_socket *kso,
 int kru_socket_close(struct kru_socket *kso);
 int kru_socket_bind(struct kru_socket *kso, char *addr);
 int kru_socket_connect(struct kru_socket *kso, char *addr);
+int kru_socket_recv(struct kru_socket *kso, void *buf, size_t len, int flags);
 int kru_socket_recvfrom(struct kru_socket *kso, void *buf, size_t len,
 			int flags, struct sockaddr *src_addr,
 			socklen_t *addrlen);
+int kru_socket_send(struct kru_socket *kso, const void *buf, size_t len,
+		    int flags);
 int kru_socket_sendto(struct kru_socket *kso, const void *buf, size_t len,
 		      int flags, struct sockaddr *src_addr, socklen_t addrlen);
 int kru_socket_shutdown(struct kru_socket *kso, int how);
