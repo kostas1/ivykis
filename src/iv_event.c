@@ -186,3 +186,8 @@ void iv_event_post(struct iv_event *this)
 			iv_task_register(&this->task);
 	}
 }
+
+int iv_event_is_active(struct iv_event *this)
+{
+	return !iv_list_empty(&this->list) || iv_task_registered(&this->task);
+}
