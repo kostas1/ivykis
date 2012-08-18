@@ -127,6 +127,10 @@ int iv_event_register(struct iv_event *this)
 
 	INIT_IV_LIST_HEAD(&this->list);
 
+	IV_TASK_INIT(&this->task);
+	this->task.cookie = this->cookie;
+	this->task.handler = this->handler;
+
 	return 0;
 }
 
@@ -140,6 +144,9 @@ void iv_event_unregister(struct iv_event *this)
 		mutex_unlock(&tinfo->list_mutex);
 	}
 
+	if (iv_task_registered(&this->task))
+		iv_task_unregister(&this->task);
+
 	if (!--tinfo->event_count) {
 		if (!iv_event_use_event_raw) {
 			event_rx_off(tinfo->u.st);
@@ -152,23 +159,30 @@ void iv_event_unregister(struct iv_event *this)
 
 void iv_event_post(struct iv_event *this)
 {
+	struct iv_event_thr_info *me = iv_tls_user_ptr(&iv_event_tls_user);
 	struct iv_event_thr_info *tinfo = this->tinfo;
-	int post;
 
-	post = 0;
+	if (me != tinfo) {
+		int post;
 
-	mutex_lock(&tinfo->list_mutex);
-	if (iv_list_empty(&this->list)) {
-		if (iv_list_empty(&tinfo->pending_events))
-			post = 1;
-		iv_list_add_tail(&this->list, &tinfo->pending_events);
-	}
-	mutex_unlock(&tinfo->list_mutex);
+		post = 0;
 
-	if (post) {
-		if (!iv_event_use_event_raw)
-			event_send(tinfo->u.st);
-		else
-			iv_event_raw_post(&tinfo->u.ier);
+		mutex_lock(&tinfo->list_mutex);
+		if (iv_list_empty(&this->list)) {
+			if (iv_list_empty(&tinfo->pending_events))
+				post = 1;
+			iv_list_add_tail(&this->list, &tinfo->pending_events);
+		}
+		mutex_unlock(&tinfo->list_mutex);
+
+		if (post) {
+			if (!iv_event_use_event_raw)
+				event_send(tinfo->u.st);
+			else
+				iv_event_raw_post(&tinfo->u.ier);
+		}
+	} else {
+		if (!iv_task_registered(&this->task))
+			iv_task_register(&this->task);
 	}
 }

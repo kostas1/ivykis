@@ -34,6 +34,7 @@ struct iv_event {
 
 	void			*tinfo;
 	struct iv_list_head	list;
+	struct iv_task		task;
 };
 
 static inline void IV_EVENT_INIT(struct iv_event *this)
