@@ -8,14 +8,14 @@ PROGS			= iv_event_test			\
 			  iv_work_test
 
 TESTS			= avl				\
+			  client			\
 			  iv_event_raw_test		\
 			  struct_sizes			\
 			  timer				\
 			  timer_order
 
 if HAVE_POSIX
-PROGS			+= client			\
-			   connectfail			\
+PROGS			+= connectfail			\
 			   connectreset			\
 			   iv_fd_pump_discard		\
 			   iv_fd_pump_echo		\
