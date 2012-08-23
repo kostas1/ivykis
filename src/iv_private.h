@@ -41,11 +41,12 @@ struct iv_state {
 
 #ifdef _WIN32
 	/* iv_handle.c  */
-	HANDLE			wait;
-	CRITICAL_SECTION	active_handle_list_lock;
-	struct iv_list_head	active_handle_list;
-	int			numhandles;
-	HANDLE			handled_handle;
+	HANDLE			active_handles_wait;
+	CRITICAL_SECTION	active_handles_lock;
+	struct iv_list_head	active_handles;
+	struct iv_list_head	active_handles_no_handler;
+	struct iv_list_head	handle_groups;
+	HANDLE			thr_wait;
 #endif
 
 	/* iv_task.c  */

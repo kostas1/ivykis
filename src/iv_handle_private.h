@@ -22,17 +22,27 @@ struct iv_handle_ {
 	/*
 	 * User data.
 	 */
-	HANDLE                  handle;
-	void                    *cookie;
-	void                    (*handler)(void *);
+	HANDLE			handle;
+	void			*cookie;
+	void			(*handler)(void *);
 
 	/*
 	 * Private data.
 	 */
-	int                     registered;
-	int                     polling;
-	struct iv_state         *st;
-	struct iv_list_head     list;
-	HANDLE                  rewait_handle;
-	HANDLE                  thr_handle;
+	int			registered;
+	struct iv_handle_group	*grp;
+	int			index;
+	struct iv_list_head	list;
+};
+
+struct iv_handle_group {
+	struct iv_list_head	list;
+	struct iv_state		*st;
+
+	HANDLE			thr_handle;
+
+	int			num_handles;
+	int			active_handles;
+	struct iv_handle_	*h[MAXIMUM_WAIT_OBJECTS];
+	HANDLE			handle[MAXIMUM_WAIT_OBJECTS];
 };
