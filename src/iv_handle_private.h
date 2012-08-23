@@ -18,6 +18,9 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#ifndef __IV_HANDLE_PRIVATE_H
+#define __IV_HANDLE_PRIVATE_H
+
 struct iv_handle_ {
 	/*
 	 * User data.
@@ -30,9 +33,108 @@ struct iv_handle_ {
 	 * Private data.
 	 */
 	int			registered;
-	int			polling;
-	struct iv_state		*st;
-	struct iv_list_head	list;
-	HANDLE			rewait_handle;
-	HANDLE			thr_handle;
+	struct iv_list_head	list_active;
+	union {
+		struct {
+			struct iv_handle_group	*grp;
+			int			index;
+		} apc;
+		struct {
+			struct iv_handle_group	*grp;
+			int			index;
+		} me;
+		struct {
+			struct iv_handle_group	*grp;
+			int			index;
+		} mp;
+		struct {
+			int			polling;
+			struct iv_state		*st;
+			HANDLE			rewait_handle;
+			HANDLE			thr_handle;
+		} simple;
+	} u;
 };
+
+#define MAX_THREAD_HANDLES	(MAXIMUM_WAIT_OBJECTS - 1)
+
+struct iv_handle_group {
+	union {
+		struct {
+			struct iv_list_head	list;
+			struct iv_list_head	list_recent_deleted;
+
+			struct iv_state		*st;
+
+			HANDLE			thr_handle;
+
+			int			num_handles;
+			int			active_handles;
+			struct iv_handle_	*h[MAXIMUM_WAIT_OBJECTS];
+			HANDLE			handle[MAXIMUM_WAIT_OBJECTS];
+		} apc;
+		struct {
+			struct iv_list_head	list_all;
+			struct iv_list_head	list_recent_deleted;
+
+			struct iv_state		*st;
+
+			HANDLE			thr_handle;
+			HANDLE			thr_signal_handle;
+
+			CRITICAL_SECTION	group_lock;
+			struct iv_list_head	active_handles;
+			struct iv_handle_	*h[MAX_THREAD_HANDLES];
+			int			addition_pointer;
+			int			num_deletions;
+
+			int			quit;
+			int			num_handles;
+			HANDLE			hnd[MAXIMUM_WAIT_OBJECTS];
+			int			have_active_handles;
+		} me;
+		struct {
+			struct iv_list_head	list;
+			struct iv_list_head	list_recent_deleted;
+
+			struct iv_state		*st;
+
+			HANDLE			thr_handle;
+
+			int			num_handles;
+			int			active_handles;
+			struct iv_handle_	*h[MAXIMUM_WAIT_OBJECTS];
+			HANDLE			handle[MAXIMUM_WAIT_OBJECTS];
+		} mp;
+	} u;
+};
+
+struct iv_handle_poll_method {
+	char	*name;
+
+	void	(*init)(struct iv_state *st);
+	void	(*deinit)(struct iv_state *st);
+	int	(*is_primary_thread)(struct iv_state *st);
+	void	(*poll_and_run)(struct iv_state *st, struct timespec *to);
+	void	(*quit)(struct iv_state *st);
+	void	(*unquit)(struct iv_state *st);
+	void	(*process_detach)(void);
+
+	void	(*handle_init)(struct iv_handle_ *h);
+	void	(*handle_register)(struct iv_handle_ *h);
+	void	(*handle_unregister)(struct iv_handle_ *h);
+	void	(*handle_set_handler)(struct iv_handle_ *h,
+				      void (*handler)(void *));
+};
+
+extern struct iv_handle_poll_method *method;
+
+struct iv_handle_poll_method iv_handle_poll_method_apc;
+struct iv_handle_poll_method iv_handle_poll_method_apc_norebalance;
+struct iv_handle_poll_method iv_handle_poll_method_me;
+struct iv_handle_poll_method iv_handle_poll_method_mp;
+struct iv_handle_poll_method iv_handle_poll_method_mp_norebalance;
+struct iv_handle_poll_method iv_handle_poll_method_simple;
+
+
+#endif

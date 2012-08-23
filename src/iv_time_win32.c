@@ -25,7 +25,7 @@
 #include <time.h>
 #include "iv_private.h"
 
-static int method;
+static int time_method;
 static ULONGLONG (WINAPI *gtc64)(void);
 static int tc32_cs_initialized;
 static CRITICAL_SECTION tc32_cs;
@@ -53,7 +53,7 @@ void iv_time_get(struct timespec *time)
 	DWORD tc;
 	DWORD tc_high;
 
-	switch (method) {
+	switch (time_method) {
 	case 0:
 		if (QueryPerformanceFrequency(&_freq) &&
 		    QueryPerformanceCounter(&_count)) {
@@ -66,7 +66,7 @@ void iv_time_get(struct timespec *time)
 			break;
 		}
 
-		method = 1;
+		time_method = 1;
 
 		/* fall through */
 
@@ -84,7 +84,7 @@ void iv_time_get(struct timespec *time)
 			break;
 		}
 
-		method = 2;
+		time_method = 2;
 
 		/* fall through */
 

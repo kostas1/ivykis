@@ -73,6 +73,10 @@ if HAVE_WIN32
 
 SRC			+= iv_event_raw_win32.c		\
 			   iv_handle.c			\
+			   iv_handle_apc.c		\
+			   iv_handle_me.c		\
+			   iv_handle_mp.c		\
+			   iv_handle_simple.c		\
 			   iv_main_win32.c		\
 			   iv_sock_win32.c		\
 			   iv_thread_win32.c		\
