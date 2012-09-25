@@ -37,15 +37,6 @@ struct iv_state {
 	struct iv_fd_		*handled_fd;
 #endif
 
-#ifdef _WIN32
-	/* iv_handle.c  */
-	HANDLE			wait;
-	CRITICAL_SECTION	active_handle_list_lock;
-	struct iv_list_head	active_handle_list;
-	int			numhandles;
-	HANDLE			handled_handle;
-#endif
-
 	/* iv_task.c  */
 	struct iv_list_head	tasks;
 
@@ -94,6 +85,22 @@ struct iv_state {
 #endif
 	} u;
 #endif
+
+#ifdef _WIN32
+	/* poll methods  */
+	union {
+		struct {
+			HANDLE			active_handles_wait;
+			CRITICAL_SECTION	active_handles_lock;
+			struct iv_list_head	active_handles;
+			struct iv_list_head	active_handles_no_handler;
+			struct iv_list_head	groups;
+			struct iv_list_head	groups_recent_deleted;
+			HANDLE			thr_wait;
+		} mp;
+	} u;
+#endif
+
 };
 
 #if !defined(_WIN32) && defined(HAVE_THREAD)

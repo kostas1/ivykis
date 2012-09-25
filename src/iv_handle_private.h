@@ -30,9 +30,30 @@ struct iv_handle_ {
 	 * Private data.
 	 */
 	int			registered;
-	int			polling;
-	struct iv_state		*st;
-	struct iv_list_head	list;
-	HANDLE			rewait_handle;
-	HANDLE			thr_handle;
+	struct iv_list_head	list_active;
+	union {
+		struct {
+			struct iv_handle_group	*grp;
+			int			index;
+		} mp;
+	} u;
+};
+
+struct iv_handle_group
+{
+	union {
+		struct {
+			struct iv_list_head	list;
+			struct iv_list_head	list_recent_deleted;
+
+			struct iv_state		*st;
+
+			HANDLE			thr_handle;
+
+			int			num_handles;
+			int			active_handles;
+			struct iv_handle_	*h[MAXIMUM_WAIT_OBJECTS];
+			HANDLE			handle[MAXIMUM_WAIT_OBJECTS];
+		} mp;
+	} u;
 };

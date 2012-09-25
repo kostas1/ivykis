@@ -23,19 +23,216 @@
 #include "iv_private.h"
 #include "iv_handle_private.h"
 
+/* poll thread **************************************************************/
+static int iv_handle_poll_handles(int *active, HANDLE *h, int num)
+{
+	DWORD ret;
+	int num_active;
+	int poll_from;
+
+	ret = WaitForMultipleObjectsEx(num, h, FALSE, INFINITE, TRUE);
+	if (ret == WAIT_FAILED)
+		iv_fatal("iv_handle_poll_handles: returned %x", (int)ret);
+
+	if (ret == WAIT_IO_COMPLETION || ret == WAIT_TIMEOUT)
+		return 0;
+
+	if (ret >= WAIT_ABANDONED_0)
+		ret -= WAIT_ABANDONED_0;
+	else
+		ret -= WAIT_OBJECT_0;
+	active[0] = ret;
+	num_active = 1;
+	poll_from = ret + 1;
+
+	while (poll_from < num) {
+		ret = WaitForMultipleObjectsEx(num - poll_from, h + poll_from,
+					       FALSE, 0, FALSE);
+		if (ret == WAIT_FAILED) {
+			iv_fatal("iv_handle_poll_handles: returned %x",
+				 (int)ret);
+		}
+
+		if (ret == WAIT_TIMEOUT)
+			break;
+
+		if (ret >= WAIT_ABANDONED_0)
+			ret -= WAIT_ABANDONED_0;
+		else
+			ret -= WAIT_OBJECT_0;
+		active[num_active++] = poll_from + ret;
+		poll_from += ret + 1;
+	}
+
+	return num_active;
+}
+
+static DWORD WINAPI iv_handle_poll_thread(void *_grp)
+{
+	struct iv_handle_group *grp = _grp;
+	struct iv_state *st = grp->u.mp.st;
+
+	while (grp->u.mp.num_handles) {
+		int active[MAXIMUM_WAIT_OBJECTS];
+		int num_active;
+		int sig;
+		int i;
+
+		if (grp->u.mp.active_handles) {
+			SleepEx(INFINITE, TRUE);
+			continue;
+		}
+
+		num_active = iv_handle_poll_handles(active, grp->u.mp.handle,
+						    grp->u.mp.num_handles);
+		if (!num_active)
+			continue;
+
+		grp->u.mp.active_handles = num_active;
+
+		EnterCriticalSection(&st->u.mp.active_handles_lock);
+
+		if (iv_list_empty(&st->u.mp.active_handles))
+			sig = 1;
+
+		for (i = 0; i < num_active; i++) {
+			struct iv_handle_ *h;
+
+			h = grp->u.mp.h[active[i]];
+			if (!iv_list_empty(&h->list_active)) {
+				iv_fatal("iv_handle_poll_thread: handle "
+					 "already active!");
+			}
+
+			iv_list_add_tail(&h->list_active,
+					 &st->u.mp.active_handles);
+		}
+
+		LeaveCriticalSection(&st->u.mp.active_handles_lock);
+
+		if (sig)
+			SetEvent(st->u.mp.active_handles_wait);
+	}
+
+	free(grp);
+
+	return 0;
+}
+
+
+/* poll thread mp handlers *************************************************/
+static void WINAPI iv_handle_thread_apc_kick(ULONG_PTR dummy)
+{
+}
+
+static void WINAPI iv_handle_thread_apc_add(ULONG_PTR data)
+{
+	struct iv_handle_ *h = (void *)data;
+	struct iv_handle_group *grp = h->u.mp.grp;
+
+	h->u.mp.index = grp->u.mp.num_handles++;
+
+	if (!iv_list_empty(&h->list_active))
+		grp->u.mp.active_handles++;
+
+	grp->u.mp.h[h->u.mp.index] = h;
+	grp->u.mp.handle[h->u.mp.index] = h->handle;
+
+	SetEvent(grp->u.mp.st->u.mp.thr_wait);
+}
+
+static void WINAPI iv_handle_thread_apc_delete(ULONG_PTR data)
+{
+	struct iv_handle_ *h = (void *)data;
+	struct iv_handle_group *grp = h->u.mp.grp;
+
+	grp->u.mp.num_handles--;
+
+	if (!iv_list_empty(&h->list_active))
+		grp->u.mp.active_handles--;
+
+	if (h->u.mp.index != grp->u.mp.num_handles) {
+		struct iv_handle_ *victim;
+
+		victim = grp->u.mp.h[grp->u.mp.num_handles];
+
+		grp->u.mp.h[h->u.mp.index] = victim;
+		grp->u.mp.handle[h->u.mp.index] = victim->handle;
+		victim->u.mp.index = h->u.mp.index;
+	}
+
+	h->u.mp.grp = NULL;
+	h->u.mp.index = -1;
+
+	SetEvent(grp->u.mp.st->u.mp.thr_wait);
+}
+
+
+/* poll thread requests *****************************************************/
+static void iv_handle_thread_queue(struct iv_handle_group *grp,
+				   void (WINAPI *func)(ULONG_PTR), void *arg)
+{
+	if (!QueueUserAPC(func, grp->u.mp.thr_handle, (ULONG_PTR)arg))
+		iv_fatal("iv_handle_thread_queue: QueueUserAPC failed");
+}
+
+static void iv_handle_thread_block(HANDLE h)
+{
+	if (WaitForSingleObjectEx(h, INFINITE, FALSE) != WAIT_OBJECT_0) {
+		iv_fatal("iv_handle_thread_block: "
+			 "WaitForSingleObjectEx failed");
+	}
+}
+
+static void iv_handle_thread_add(struct iv_state *st,
+				 struct iv_handle_group *grp,
+				 struct iv_handle_ *h)
+{
+	h->u.mp.grp = grp;
+	iv_handle_thread_queue(grp, iv_handle_thread_apc_add, h);
+
+	iv_handle_thread_block(st->u.mp.thr_wait);
+}
+
+static void iv_handle_thread_delete(struct iv_state *st,
+				    struct iv_handle_group *grp,
+				    struct iv_handle_ *h)
+{
+	HANDLE toclose;
+
+	if (grp->u.mp.num_handles == 1) {
+		iv_list_del(&grp->u.mp.list);
+		iv_list_del(&grp->u.mp.list_recent_deleted);
+		toclose = grp->u.mp.thr_handle;
+	} else {
+		toclose = INVALID_HANDLE_VALUE;
+	}
+
+	iv_handle_thread_queue(grp, iv_handle_thread_apc_delete, h);
+	iv_handle_thread_block(st->u.mp.thr_wait);
+
+	if (toclose != INVALID_HANDLE_VALUE)
+		CloseHandle(toclose);
+}
+
+
+/* internal use *************************************************************/
 void iv_handle_init(struct iv_state *st)
 {
-	st->wait = CreateEvent(NULL, FALSE, FALSE, NULL);
-	InitializeCriticalSection(&st->active_handle_list_lock);
-	INIT_IV_LIST_HEAD(&st->active_handle_list);
-	st->numhandles = 0;
-	st->handled_handle = INVALID_HANDLE_VALUE;
+	st->u.mp.active_handles_wait = CreateEvent(NULL, FALSE, FALSE, NULL);
+	InitializeCriticalSection(&st->u.mp.active_handles_lock);
+	INIT_IV_LIST_HEAD(&st->u.mp.active_handles);
+	INIT_IV_LIST_HEAD(&st->u.mp.active_handles_no_handler);
+	INIT_IV_LIST_HEAD(&st->u.mp.groups);
+	INIT_IV_LIST_HEAD(&st->u.mp.groups_recent_deleted);
+	st->u.mp.thr_wait = CreateEvent(NULL, FALSE, FALSE, NULL);
 }
 
 void iv_handle_deinit(struct iv_state *st)
 {
-	CloseHandle(st->wait);
-	DeleteCriticalSection(&st->active_handle_list_lock);
+	CloseHandle(st->u.mp.active_handles_wait);
+	DeleteCriticalSection(&st->u.mp.active_handles_lock);
+	CloseHandle(st->u.mp.thr_wait);
 }
 
 void iv_handle_poll_and_run(struct iv_state *st, struct timespec *to)
@@ -43,197 +240,270 @@ void iv_handle_poll_and_run(struct iv_state *st, struct timespec *to)
 	int msec;
 	int ret;
 	struct iv_list_head handles;
+	struct iv_list_head temp;
 
 	msec = 1000 * to->tv_sec + (to->tv_nsec + 999999) / 1000000;
 
-	ret = WaitForSingleObjectEx(st->wait, msec, TRUE);
+	ret = WaitForSingleObjectEx(st->u.mp.active_handles_wait, msec, TRUE);
 	if (ret != WAIT_OBJECT_0 && ret != WAIT_IO_COMPLETION &&
 	    ret != WAIT_TIMEOUT) {
-		iv_fatal("iv_handle_poll_and_run: MsgWaitForMultipleObjectsEx "
+		iv_fatal("iv_handle_poll_and_run: WaitForSingleObjectEx "
 			 "returned %x", (int)ret);
 	}
 
 	__iv_invalidate_now(st);
 
-	EnterCriticalSection(&st->active_handle_list_lock);
-	__iv_list_steal_elements(&st->active_handle_list, &handles);
-	LeaveCriticalSection(&st->active_handle_list_lock);
+	EnterCriticalSection(&st->u.mp.active_handles_lock);
+	__iv_list_steal_elements(&st->u.mp.active_handles, &handles);
+	LeaveCriticalSection(&st->u.mp.active_handles_lock);
+
+	INIT_IV_LIST_HEAD(&temp);
 
 	while (!iv_list_empty(&handles)) {
 		struct iv_handle_ *h;
 
-		h = iv_list_entry(handles.next, struct iv_handle_, list);
-		iv_list_del_init(&h->list);
+		h = iv_list_entry(handles.next, struct iv_handle_, list_active);
 
-		st->handled_handle = h;
+		iv_list_del_init(&h->list_active);
+		iv_list_add_tail(&h->list_active, &temp);
+
 		h->handler(h->cookie);
-		if (st->handled_handle == h) {
-			SetEvent(h->rewait_handle);
-			st->handled_handle = INVALID_HANDLE_VALUE;
+
+		if (!iv_list_empty(&temp)) {
+			struct iv_handle_group *grp = h->u.mp.grp;
+
+			if (!--grp->u.mp.active_handles) {
+				iv_handle_thread_queue(grp,
+					iv_handle_thread_apc_kick, NULL);
+			}
+			iv_list_del_init(&h->list_active);
 		}
 	}
 }
 
+void iv_handle_quit(struct iv_state *st)
+{
+	// @@@
+}
+
+void iv_handle_unquit(struct iv_state *st)
+{
+	// @@@
+}
+
+
+/* public use ***************************************************************/
 void IV_HANDLE_INIT(struct iv_handle *_h)
 {
 	struct iv_handle_ *h = (struct iv_handle_ *)_h;
 
-	h->registered = 0;
-	h->polling = 0;
-	h->st = NULL;
-	INIT_IV_LIST_HEAD(&h->list);
-	h->rewait_handle = INVALID_HANDLE_VALUE;
-	h->thr_handle = INVALID_HANDLE_VALUE;
+	h->u.mp.grp = NULL;
+	h->u.mp.index = -1;
+	INIT_IV_LIST_HEAD(&h->list_active);
 }
 
-static DWORD WINAPI iv_handle_poll_thread(void *_h)
+static struct iv_handle_group *iv_handle_last_group(struct iv_state *st)
 {
-	struct iv_handle_ *h = (struct iv_handle_ *)_h;
-	int waiting;
+	struct iv_handle_group *grp;
 
-	waiting = 1;
-	while (h->polling) {
-		struct iv_state *st = h->st;
-		HANDLE hnd;
-		DWORD ret;
-		int sig;
-
-		hnd = waiting ? h->handle : h->rewait_handle;
-
-		ret = WaitForSingleObjectEx(hnd, INFINITE, TRUE);
-		if (ret == WAIT_IO_COMPLETION)
-			continue;
-
-		if (ret != WAIT_OBJECT_0 && ret != WAIT_ABANDONED) {
-			iv_fatal("iv_handle_poll_thread(%d): %x",
-				 (int)(ULONG_PTR)h->handle, (int)ret);
-		}
-
-		waiting ^= 1;
-		if (waiting)
-			continue;
-
-		sig = 0;
-
-		EnterCriticalSection(&st->active_handle_list_lock);
-		if (iv_list_empty(&h->list)) {
-			if (iv_list_empty(&st->active_handle_list))
-				sig = 1;
-			iv_list_add_tail(&h->list, &st->active_handle_list);
-		}
-		LeaveCriticalSection(&st->active_handle_list_lock);
-
-		if (sig)
-			SetEvent(st->wait);
+	grp = NULL;
+	if (!iv_list_empty(&st->u.mp.groups)) {
+		grp = iv_container_of(st->u.mp.groups.prev,
+				      struct iv_handle_group, u.mp.list);
 	}
 
-	return 0;
+	return grp;
 }
 
-static void __iv_handle_register(struct iv_handle_ *h)
+static struct iv_handle_group *
+iv_handle_choose_group(struct iv_state *st, int rebal)
 {
-	HANDLE w;
+	struct iv_handle_group *grp;
 
-	h->polling = 1;
+	if (rebal && !iv_list_empty(&st->u.mp.groups)) {
+		grp = iv_handle_last_group(st);
+		if (grp->u.mp.num_handles < MAXIMUM_WAIT_OBJECTS)
+			return grp;
+	} else if (!rebal && !iv_list_empty(&st->u.mp.groups_recent_deleted)) {
+		grp = iv_container_of(st->u.mp.groups_recent_deleted.next,
+				      struct iv_handle_group,
+				      u.mp.list_recent_deleted);
 
-	w = CreateThread(NULL, 0, iv_handle_poll_thread, (void *)h, 0, NULL);
-	if (w == NULL)
-		iv_fatal("__iv_handle_register: CreateThread failed");
+		return grp;
+	}
 
-	h->thr_handle = w;
+	return NULL;
 }
 
+static void
+__iv_handle_register(struct iv_state *st, struct iv_handle_ *h, int rebal)
+{
+	struct iv_handle_group *grp;
+
+	if (!iv_list_empty(&h->list_active)) {
+		EnterCriticalSection(&st->u.mp.active_handles_lock);
+		iv_list_del(&h->list_active);
+		iv_list_add_tail(&h->list_active, &st->u.mp.active_handles);
+		LeaveCriticalSection(&st->u.mp.active_handles_lock);
+
+		SetEvent(st->u.mp.active_handles_wait);
+	}
+
+	grp = iv_handle_choose_group(st, rebal);
+	if (grp == NULL) {
+		HANDLE thr_handle;
+
+		grp = malloc(sizeof(*grp));
+		if (grp == NULL)
+			iv_fatal("__iv_handle_register: out of memory");
+
+		iv_list_add_tail(&grp->u.mp.list, &st->u.mp.groups);
+		iv_list_add(&grp->u.mp.list_recent_deleted,
+			    &st->u.mp.groups_recent_deleted);
+		grp->u.mp.st = st;
+		grp->u.mp.num_handles = 1;
+		grp->u.mp.active_handles = !iv_list_empty(&h->list_active);
+		grp->u.mp.h[0] = h;
+		grp->u.mp.handle[0] = h->handle;
+
+		h->u.mp.grp = grp;
+		h->u.mp.index = 0;
+
+		thr_handle = CreateThread(NULL, 0, iv_handle_poll_thread,
+					  (void *)grp, 0, NULL);
+		if (thr_handle == NULL) {
+			iv_fatal("__iv_handle_register: "
+				 "CreateThread failed");
+		}
+
+		grp->u.mp.thr_handle = thr_handle;
+	} else {
+		iv_handle_thread_add(st, grp, h);
+		if (grp->u.mp.num_handles == MAXIMUM_WAIT_OBJECTS)
+			iv_list_del_init(&grp->u.mp.list_recent_deleted);
+	}
+}
+
+static void __iv_handle_unregister(struct iv_handle_ *h, int rebal)
+{
+	struct iv_handle_group *grp = h->u.mp.grp;
+	struct iv_state *st = grp->u.mp.st;
+
+	if (!iv_list_empty(&h->list_active)) {
+		EnterCriticalSection(&st->u.mp.active_handles_lock);
+		iv_list_del(&h->list_active);
+		iv_list_add_tail(&h->list_active,
+				 &st->u.mp.active_handles_no_handler);
+		LeaveCriticalSection(&st->u.mp.active_handles_lock);
+	}
+
+	if (rebal) {
+		struct iv_handle_group *last = iv_handle_last_group(st);
+
+		if (grp == last) {
+			iv_handle_thread_delete(st, grp, h);
+		} else {
+			struct iv_handle_ *h2;
+
+			h2 = last->u.mp.h[last->u.mp.num_handles - 1];
+			iv_handle_thread_delete(st, last, h2);
+
+			if (grp->u.mp.num_handles == 1) {
+				iv_handle_thread_add(st, grp, h2);
+				iv_handle_thread_delete(st, grp, h);
+			} else {
+				iv_handle_thread_delete(st, grp, h);
+				iv_handle_thread_add(st, grp, h2);
+			}
+		}
+	} else {
+		if (grp->u.mp.num_handles == 1) {
+			iv_handle_thread_delete(st, grp, h);
+		} else {
+			iv_handle_thread_delete(st, grp, h);
+			iv_list_del(&grp->u.mp.list_recent_deleted);
+			iv_list_add(&grp->u.mp.list_recent_deleted,
+				    &st->u.mp.groups_recent_deleted);
+		}
+	}
+}
+
+#if 0
 void iv_handle_register(struct iv_handle *_h)
 {
-	struct iv_state *st = iv_get_state();
 	struct iv_handle_ *h = (struct iv_handle_ *)_h;
-
-	if (h->registered) {
-		iv_fatal("iv_handle_register: called with handle "
-			 "which is still registered");
-	}
-
-	h->registered = 1;
-	h->st = st;
-	INIT_IV_LIST_HEAD(&h->list);
-	h->rewait_handle = CreateEvent(NULL, FALSE, FALSE, NULL);
+	struct iv_state *st = iv_get_state();
 
 	if (h->handler != NULL)
-		__iv_handle_register(h);
+		__iv_handle_register(st, h, 1);
 
 	st->numobjs++;
-	st->numhandles++;
-}
-
-static void WINAPI iv_handle_dummy_apcproc(ULONG_PTR dummy)
-{
-}
-
-static void __iv_handle_unregister(struct iv_handle_ *h)
-{
-	DWORD ret;
-
-	h->polling = 0;
-
-	ret = QueueUserAPC(iv_handle_dummy_apcproc, h->thr_handle, 0);
-	if (ret == 0)
-		iv_fatal("__iv_handle_unregister: QueueUserAPC fail");
-
-	do {
-		ret = WaitForSingleObjectEx(h->thr_handle, INFINITE, TRUE);
-	} while (ret == WAIT_IO_COMPLETION);
-
-	if (ret != WAIT_OBJECT_0)
-		iv_fatal("__iv_handle_unregister: WaitForSingleObjectEx fail");
-
-	CloseHandle(h->thr_handle);
-	h->thr_handle = INVALID_HANDLE_VALUE;
 }
 
 void iv_handle_unregister(struct iv_handle *_h)
 {
 	struct iv_handle_ *h = (struct iv_handle_ *)_h;
-	struct iv_state *st = h->st;
-
-	if (!h->registered) {
-		iv_fatal("iv_handle_unregister: called with handle "
-			 "which is not registered");
-	}
-	h->registered = 0;
+	struct iv_handle_group *grp = h->u.mp.grp;
+	struct iv_state *st = grp->u.mp.st;
 
 	if (h->handler != NULL)
-		__iv_handle_unregister(h);
+		__iv_handle_unregister(h, 1);
 
-	h->st = NULL;
-	iv_list_del_init(&h->list);
-	CloseHandle(&h->rewait_handle);
+	if (!iv_list_empty(&h->list_active))
+		iv_list_del(&h->list_active);
 
 	st->numobjs--;
-	st->numhandles--;
-	if (st->handled_handle == h)
-		st->handled_handle = INVALID_HANDLE_VALUE;
-}
-
-int iv_handle_registered(struct iv_handle *_h)
-{
-	struct iv_handle_ *h = (struct iv_handle_ *)_h;
-
-	return h->registered;
 }
 
 void iv_handle_set_handler(struct iv_handle *_h, void (*handler)(void *))
 {
 	struct iv_handle_ *h = (struct iv_handle_ *)_h;
-
-	if (!h->registered) {
-		iv_fatal("iv_handle_set_handler: called with handle "
-			 "which is not registered");
-	}
+	struct iv_state *st = iv_get_state();
 
 	if (h->handler == NULL && handler != NULL)
-		__iv_handle_register(h);
+		__iv_handle_register(st, h, 1);
 	else if (h->handler != NULL && handler == NULL)
-		__iv_handle_unregister(h);
+		__iv_handle_unregister(h, 1);
 
 	h->handler = handler;
 }
+#else
+void iv_handle_register(struct iv_handle *_h)
+{
+	struct iv_handle_ *h = (struct iv_handle_ *)_h;
+	struct iv_state *st = iv_get_state();
+
+	if (h->handler != NULL)
+		__iv_handle_register(st, h, 0);
+
+	st->numobjs++;
+}
+
+void iv_handle_unregister(struct iv_handle *_h)
+{
+	struct iv_handle_ *h = (struct iv_handle_ *)_h;
+	struct iv_handle_group *grp = h->u.mp.grp;
+	struct iv_state *st = grp->u.mp.st;
+
+	if (h->handler != NULL)
+		__iv_handle_unregister(h, 0);
+
+	if (!iv_list_empty(&h->list_active))
+		iv_list_del(&h->list_active);
+
+	st->numobjs--;
+}
+
+void iv_handle_set_handler(struct iv_handle *_h, void (*handler)(void *))
+{
+	struct iv_handle_ *h = (struct iv_handle_ *)_h;
+	struct iv_state *st = iv_get_state();
+
+	if (h->handler == NULL && handler != NULL)
+		__iv_handle_register(st, h, 0);
+	else if (h->handler != NULL && handler == NULL)
+		__iv_handle_unregister(h, 0);
+
+	h->handler = handler;
+}
+#endif
